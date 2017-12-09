@@ -1,5 +1,4 @@
 #include <iostream>
-#include <stdio.h>
 #include <vector>
 #include "./base.hpp"
 
@@ -36,7 +35,7 @@ private:
     void make_copy(const char *__s, std::streamsize __n){
         char * b;
         b = new char[__n + 1];
-        memcpy(b, __s, __n);
+        std::memcpy(b, __s, __n);
         delete b;
     }
 };

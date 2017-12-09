@@ -1,3 +1,4 @@
+#include <sstream>
 #include "./colorize.hpp"
 
 #ifndef INC_LOGGING

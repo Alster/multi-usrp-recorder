@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <iostream>
+#include <sstream>
 #include "./base.hpp"
 
 #ifndef INC_SINK_FILE_ROTATOR

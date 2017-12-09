@@ -1,6 +1,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <sstream>
 #include "./base.hpp"
 
 #ifndef INC_SINK_FILE_AB_MODE
