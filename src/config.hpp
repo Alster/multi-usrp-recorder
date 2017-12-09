@@ -1,6 +1,8 @@
 #ifndef INC_CONFIG
 #define INC_CONFIG
 
+#define LLRECORDER_VERSION "1.0"
+
 typedef float DATA_TYPE;
 uint QUEUE_SIZE = 4;
 uint WRITE_SLEEP_TIME = 200;

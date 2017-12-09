@@ -20,6 +20,7 @@
 #include "config.hpp"
 #include "interrupt.hpp"
 #include "logging.hpp"
+#include "utils.hpp"
 
 #ifndef INC_USRP_CONTROLLER
 #define INC_USRP_CONTROLLER
