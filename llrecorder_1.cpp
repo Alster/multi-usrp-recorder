@@ -49,6 +49,13 @@ namespace fs = boost::filesystem;
 //#endif /* HAVE_THREAD_SETNAME_DUMMY */
 //}
 
+unsigned long getThreadId(){
+    std::string threadId = boost::lexical_cast<std::string>(boost::this_thread::get_id());
+    unsigned long threadNumber = 0;
+    sscanf(threadId.c_str(), "%lx", &threadNumber);
+    return threadNumber;
+}
+
 std::vector<std::string> device_serials = {};
 
 std::vector<USRPController *> devices;
