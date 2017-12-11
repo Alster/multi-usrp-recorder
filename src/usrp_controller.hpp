@@ -34,11 +34,9 @@ public:
     USRPController(std::string serial, double rate, double freq, double gain, std::string file_name) :
             serial(serial), rate(rate), freq(freq), gain(gain), queue_to_read(QUEUE_SIZE),
             queue_to_write(QUEUE_SIZE), writes_count(0), total_samples_written(0) {
-
-        BUFFER_SIZE = rate;
+        buffer_size = rate / PARTS_PER_SECOND;
 
         std::cout << "create sink" << std::endl;
-
 #if USE_NULL_SINK == true
         sink = new SinkNull(file_name);
 #else
@@ -46,6 +44,7 @@ public:
         else sink = new SinkFile(file_name);
 #endif
         std::cout << "create sink DONE" << std::endl;
+
         //region Log prefix
         std::ostringstream string_stream;
         string_stream << def << bold << "[DEV " << blue << serial << "] " << def;
@@ -124,8 +123,7 @@ public:
         ss_init_log << "max_num_samps " << this->rx_stream->get_max_num_samps() << std::endl;
 
         std::cout << "initialize buffers" << std::endl;
-        for (int i = 0; i < QUEUE_SIZE; i++) queue_to_read.enqueue(new BufferWrapper<DATA_TYPE>(BUFFER_SIZE));
-//        for (int i = 0; i < QUEUE_SIZE; i++) queue_to_read.enqueue(new BufferWrapper<DATA_TYPE>(this->rate));
+        for (int i = 0; i < QUEUE_SIZE; i++) queue_to_read.enqueue(new BufferWrapper<DATA_TYPE>(buffer_size));
 
         prev_write_time = boost::posix_time::microsec_clock::local_time();
 
@@ -133,6 +131,7 @@ public:
     }
 
     void schedule_stream(){
+#if DEBUG
         int cmd_time_seconds = command_execution_time_suka.get_full_secs();
         int device_time_seconds = this->device->get_time_now().get_full_secs();
         std::stringstream ss;
@@ -141,7 +140,7 @@ public:
                     << ffatal("Late command")
                     << std::endl
                     ;
-            stop_signal_called = true;
+            safe_kill();
         }
         ss << str(
                 boost::format("Schedule command for %3i, now %i")
@@ -150,12 +149,13 @@ public:
             )
             ;
         log_debug(ss.str());
+#endif
         uhd::stream_cmd_t stream_cmd(uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_MORE);
-        stream_cmd.num_samps = size_t(BUFFER_SIZE);
+        stream_cmd.num_samps = buffer_size;
         stream_cmd.stream_now = false;
         stream_cmd.time_spec = uhd::time_spec_t(command_execution_time_suka);
         this->rx_stream->issue_stream_cmd(stream_cmd);
-        command_execution_time_suka = command_execution_time_suka + uhd::time_spec_t(1.0);
+        command_execution_time_suka = command_execution_time_suka + uhd::time_spec_t(1.0 / PARTS_PER_SECOND);
     }
 
     void start(uhd::time_spec_t cmd_time) {
@@ -164,10 +164,10 @@ public:
     }
 
     void stream_runner(){
-        for (int i = 0; i < 8; i++) schedule_stream();
+        for (int i = 0; i < QUEUE_SIZE; i++) schedule_stream();
         while (not stop_signal_called) {
             schedule_stream();
-            boost::this_thread::sleep(boost::posix_time::milliseconds(1000));
+            boost::this_thread::sleep(boost::posix_time::milliseconds(1000 / PARTS_PER_SECOND));
         }
     }
 
@@ -177,41 +177,38 @@ public:
         while (not stop_signal_called) {
             if (queue_to_read.size_approx() == 0){
                 log_important(ffatal("All buffers are full"));
-                stop_signal_called = true;
-                return;
+                return safe_kill();
             }
+#if DEBUG
             boost::posix_time::ptime before = boost::posix_time::microsec_clock::local_time();
-
-            if (not queue_to_read.try_dequeue(active_read_buffer)) {
-                continue;
-            }
-
+#endif
+            if (not queue_to_read.try_dequeue(active_read_buffer)) continue;
+#if DEBUG
             boost::posix_time::ptime after = boost::posix_time::microsec_clock::local_time();
-
             log_debug(str(
                 boost::format("Dequeue %i5i ms, buffs to write %2i, buffs to recv %2i")
                 % (after.time_of_day().total_milliseconds() - before.time_of_day().total_milliseconds())
                 % queue_to_write.size_approx() 
                 % queue_to_read.size_approx() 
                 ));
-
+#endif
             active_read_buffer->samples_num = this->rx_stream->recv(
                     &active_read_buffer->buffer.front(),
-                    BUFFER_SIZE, md, 3000.0,
+                    buffer_size, md, 3000.0,
                     false
             );
+#if DEBUG
             log_debug(md.to_pp_string(false));
             if (md.fragment_offset == 0) log_debug(ftrivial("Frag is 0"));
-
-            if (active_read_buffer->samples_num != 0 && active_read_buffer->samples_num != BUFFER_SIZE){
+            if (active_read_buffer->samples_num != 0 && active_read_buffer->samples_num != buffer_size){
                 log_debug(str(boost::format("wtf: received %i5 samples") % active_read_buffer->samples_num));
             }
+#endif
             //region Catch errors
             if (md.error_code != uhd::rx_metadata_t::ERROR_CODE_NONE) {
-                if (md.out_of_sequence){
-                    log_important(ftrivial("!!! out_of_sequence"));
-                }
-                if (md.error_code != uhd::rx_metadata_t::ERROR_CODE_OVERFLOW){
+                if (md.out_of_sequence) log_important(ftrivial("!!! out_of_sequence"));
+                if (md.error_code == uhd::rx_metadata_t::ERROR_CODE_OVERFLOW) log_important(ftrivial(md.strerror()));
+                else {
                     std::stringstream err_ss;
                     err_ss
                             << ffatal(md.strerror()) << std::endl
@@ -222,26 +219,24 @@ public:
                             << "\tDevice time: " << (this->device->get_time_now().get_full_secs()) << " seconds from start" << std::endl
                             ;
                     log_important(err_ss.str());
-                    // stop_signal_called = true;
-                    // return;
-                }
-                else {
-                    log_important(ftrivial(md.strerror()));
+                    // return safe_kill()
                 }
                 queue_to_read.enqueue(active_read_buffer);
                 continue;
             }
+#if DEBUG
             else {
-                if (active_read_buffer->samples_num != 0 && active_read_buffer->samples_num != BUFFER_SIZE){
+                if (active_read_buffer->samples_num != 0 && active_read_buffer->samples_num != buffer_size){
                     log_debug(str(boost::format("Received %5i samples, but no error!") % active_read_buffer->samples_num));
                 }
             }
-            if (active_read_buffer->samples_num != BUFFER_SIZE) {
-                active_read_buffer->samples_num = BUFFER_SIZE;
+#endif
+            if (active_read_buffer->samples_num != buffer_size) {
+                active_read_buffer->samples_num = buffer_size;
+#if DEBUG
                 log_debug("Write fake data");
-                for (int i = active_read_buffer->samples_num; i < BUFFER_SIZE; i++) {
-                    active_read_buffer->buffer[i] = 0;
-                }
+#endif
+                for (int i = active_read_buffer->samples_num; i < buffer_size; i++) active_read_buffer->buffer[i] = 0;
             }
             //endregion
             queue_to_write.enqueue(active_read_buffer);
@@ -260,32 +255,34 @@ public:
             active_write_buffer = *queue_to_write.peek();
             if (not queue_to_write.pop()) {
                 log_important(ffatal("Cannot pop write queue"));
-                stop_signal_called = true;
-                return;
+                return safe_kill();
             }
+// #if DEBUG
             boost::posix_time::ptime write_start = boost::posix_time::microsec_clock::local_time();
-            int q_size = int(queue_to_write.size_approx()) + 1;
+// #endif
             write(active_write_buffer->buffer, active_write_buffer->samples_num);
             queue_to_read.enqueue(active_write_buffer);
-
+// #if DEBUG
             boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
-
             writes_count++;
-
-            if (VERBOSE){
-                boost::posix_time::ptime current_time_bitch = boost::posix_time::microsec_clock::local_time();
-                log_verbose(str(boost::format("Wait %5i ms, write %5i ms, buffers: free %2i, busy %2i. Freq %5i, samples written %11i, seconds %9i")
-                        % (writes_count > 1 ? (write_start.time_of_day().total_milliseconds() - prev_write_time.time_of_day().total_milliseconds()) : -1)
-                        % (now.time_of_day().total_milliseconds() - write_start.time_of_day().total_milliseconds())
-                        % queue_to_read.size_approx()
-                        % queue_to_write.size_approx()
-                        % this->freq
-                        % total_samples_written
-                        % (current_time_bitch.time_of_day().total_seconds() - startup_time.time_of_day().total_seconds())
+            int writing_time = now.time_of_day().total_milliseconds() - write_start.time_of_day().total_milliseconds();
+            int recommend_writing_time = 1000 / PARTS_PER_SECOND;
+            if (writing_time > recommend_writing_time) log_important(str(
+                boost::format("Too long recording time: %4ims. of the recommended %4ims.")
+                % writing_time
+                % recommend_writing_time
                 ));
-            }
-
+            // log_verbose(str(boost::format("Wait %5i ms, write %5i ms, buffers: free %2i, busy %2i. Freq %5i, samples written %11i, seconds %9i")
+            //         % (writes_count > 1 ? (write_start.time_of_day().total_milliseconds() - prev_write_time.time_of_day().total_milliseconds()) : -1)
+            //         % writing_time
+            //         % queue_to_read.size_approx()
+            //         % queue_to_write.size_approx()
+            //         % this->freq
+            //         % total_samples_written
+            //         % (now.time_of_day().total_seconds() - startup_time.time_of_day().total_seconds())
+            // ));
             prev_write_time = now;
+// #endif
         }
     }
 
@@ -311,23 +308,28 @@ public:
         // fprintf(stderr, "%s %s", log_prepend, s);
     }
 
-    void write(const std::vector<std::complex<DATA_TYPE>>& buff, size_t samples_num) {
-//        std::cerr << log_prepend << samples_num << std::endl;
-        if (samples_num != BUFFER_SIZE) log_important("Strange fucked shit");
-        total_samples_written += samples_num;
-        if (sink->is_open()) {
-            sink->write((const char *) &buff.front(), samples_num * sizeof(std::complex<DATA_TYPE>));
-        }
+    void safe_kill(){
+        stop_signal_called = true;
     }
 
-    uhd::time_spec_t command_execution_time_suka;
+    void write(const std::vector<std::complex<DATA_TYPE>>& buff, size_t samples_num) {
+#if DEBUG
+        if (samples_num != buffer_size) log_important("Strange fucked shit");
+        total_samples_written += samples_num;
+#endif
+        // if (sink->is_open()) {
+            sink->write((const char *) &buff.front(), samples_num * sizeof(std::complex<DATA_TYPE>));
+        // }
+        // else log_important(ffatal("Sink are not open"));
+    }
 
-    uint total_samples_written;
-
-    boost::posix_time::ptime prev_write_time;
     uhd::rx_streamer::sptr rx_stream;
 
     uint writes_count;
+    uint total_samples_written;
+
+    boost::posix_time::ptime prev_write_time;
+    uhd::time_spec_t command_execution_time_suka;
 
 private:
     std::string serial;
@@ -335,6 +337,7 @@ private:
     double freq;
     double gain;
 
+    size_t buffer_size;
     BufferWrapper<DATA_TYPE> *active_read_buffer;
     BufferWrapper<DATA_TYPE> *active_write_buffer;
     moodycamel::ReaderWriterQueue<BufferWrapper<DATA_TYPE> *> queue_to_read;

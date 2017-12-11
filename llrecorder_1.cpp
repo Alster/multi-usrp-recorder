@@ -137,7 +137,6 @@ int UHD_SAFE_MAIN(int argc, char *argv[]) {
             ("opt", po::value<std::vector<std::string> >()->multitoken(), "description")
             ("dir", po::value<std::string>(&_dir)->default_value("./"), "name of the folder to write binary samples to")
             ("queue_size", po::value<uint>(&QUEUE_SIZE)->default_value(QUEUE_SIZE), "Queue size")
-//            ("buffer_size", po::value<uint>(&BUFFER_SIZE)->default_value(BUFFER_SIZE), "Buffer size")
             ("recv_frame_size", po::value<uint>(&RECV_FRAME_SIZE)->default_value(RECV_FRAME_SIZE), "Recv frame size")
             ("num_recv_frames", po::value<uint>(&NUM_RECV_FRAMES)->default_value(NUM_RECV_FRAMES), "Num recv frames")
             ("verbose", po::value<bool>(&VERBOSE)->default_value(VERBOSE), "Print additional shit")
@@ -148,6 +147,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]) {
     po::store(po::parse_command_line(argc, argv, desc), vm);
     po::notify(vm);
 
+    QUEUE_SIZE *= PARTS_PER_SECOND;
 
     if (_ab_mode.size() != 0) {
         std::vector<std::string> _ab_mode_strs;
