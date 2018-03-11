@@ -7,6 +7,7 @@
 #include <string>
 #include <csignal>
 #include <future>
+#include <chrono>
 #include <fcntl.h>
 #include <atomic>
 #include <uhd/utils/thread.hpp>
@@ -73,6 +74,10 @@ struct BandOpt {
 };
 
 int UHD_SAFE_MAIN(int argc, char *argv[]) {
+
+    //БЛЯДЬ! Заебала эта буферизация
+    std::cout.setf(std::ios::unitbuf);
+
     std::cerr << "v" << LLRECORDER_VERSION << std::endl;
     ////////////////////////////////////////////////////////////////////
     // Hi
@@ -236,6 +241,14 @@ int UHD_SAFE_MAIN(int argc, char *argv[]) {
     boost::this_thread::sleep(boost::posix_time::seconds(2));
 
     uhd::time_spec_t start_timeout = common_dev->device->get_time_now() + uhd::time_spec_t(2.0);
+
+    std::chrono::milliseconds ms = std::chrono::duration_cast< std::chrono::milliseconds >(
+        std::chrono::system_clock::now().time_since_epoch()
+    );
+    std::cout << str(
+        boost::format("<{\"action\": \"llrecorder_starts_at\", \"time\": %9i}\n")
+        % (ms.count() + int(start_timeout.get_real_secs() * 1000))
+        );
 
     for (USRPController *device : devices) {
         device->start(start_timeout);
