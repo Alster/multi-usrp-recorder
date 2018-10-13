@@ -261,10 +261,10 @@ public:
             boost::posix_time::ptime write_start = boost::posix_time::microsec_clock::local_time();
 // #endif
             write(active_write_buffer->buffer, active_write_buffer->samples_num);
+            writes_count++;
             queue_to_read.enqueue(active_write_buffer);
 // #if DEBUG
             boost::posix_time::ptime now = boost::posix_time::microsec_clock::local_time();
-            writes_count++;
             int writing_time = now.time_of_day().total_milliseconds() - write_start.time_of_day().total_milliseconds();
             int recommend_writing_time = 1000 / PARTS_PER_SECOND;
             if (writing_time > recommend_writing_time) log_important(str(

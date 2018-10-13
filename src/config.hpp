@@ -13,5 +13,6 @@ uint RECV_FRAME_SIZE = 6000;//4000
 uint NUM_RECV_FRAMES = 128;//500
 bool VERBOSE = false;
 uint QUEUE_SIZE = 4;
+uint RECEIVE_AND_DIE = 0;
 
 #endif

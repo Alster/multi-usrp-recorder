@@ -67,6 +67,23 @@ void create_device(
     std::cout << "created!" << std::endl;
 }
 
+void watcher(
+) {
+    std::cout << "Watcher started" << std::endl;
+    bool received_chunks_enough;
+    while (not stop_signal_called){
+        received_chunks_enough = true;
+        for (USRPController *device : devices) {
+            if (device->writes_count < RECEIVE_AND_DIE) received_chunks_enough = false;
+        }
+        if (RECEIVE_AND_DIE != 0 && received_chunks_enough){
+            stop_signal_called = true;
+            std::cout << "Written enough" << std::endl;
+        }
+        boost::this_thread::sleep(boost::posix_time::milliseconds(500));
+    }
+}
+
 struct BandOpt {
     float sample_rate;
     float freq;
@@ -146,7 +163,8 @@ int UHD_SAFE_MAIN(int argc, char *argv[]) {
             ("num_recv_frames", po::value<uint>(&NUM_RECV_FRAMES)->default_value(NUM_RECV_FRAMES), "Num recv frames")
             ("verbose", po::value<bool>(&VERBOSE)->default_value(VERBOSE), "Print additional shit")
             ("ab_mode", po::value<std::string>(&_ab_mode)->default_value(""), "AB mode. Example: --ab_mode A:B:C")
-            ("write_sleep", po::value<uint>(&WRITE_SLEEP_TIME)->default_value(WRITE_SLEEP_TIME), "Write sleep (milliseconds)");
+            ("write_sleep", po::value<uint>(&WRITE_SLEEP_TIME)->default_value(WRITE_SLEEP_TIME), "Write sleep (milliseconds)")
+            ("receive_and_die", po::value<uint>(&RECEIVE_AND_DIE)->default_value(RECEIVE_AND_DIE), "Receive frames and die");
 
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -220,7 +238,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]) {
                 gain,
                 (targetFolder / bandOpt.targetFile).string()
         ));
-        uhd::set_thread_name(cr_th, "Creating");
+        //<<<<<<<<<<<<<<<<<<<<<<< uhd::set_thread_name(cr_th, "Creating");
         device_serial_iterator++;
     }
 
@@ -254,15 +272,17 @@ int UHD_SAFE_MAIN(int argc, char *argv[]) {
         device->start(start_timeout);
     }
 
+    boost::thread t{watcher};
+
     boost::thread_group work_threads_group;
 
     for (USRPController *device : devices) {
         auto th_r = work_threads_group.create_thread(boost::bind(&USRPController::read_thread, device));
-        uhd::set_thread_name(th_r, "Reader");
+        // <<<<<<<<<<<<<<<<<<<<< uhd::set_thread_name(th_r, "Reader");
         auto th_w = work_threads_group.create_thread(boost::bind(&USRPController::write_thread, device));
-        uhd::set_thread_name(th_w, "Writer");
+        // <<<<<<<<<<<<<<<<<<<<< uhd::set_thread_name(th_w, "Writer");
         auto th_sch = work_threads_group.create_thread(boost::bind(&USRPController::stream_runner, device));
-        uhd::set_thread_name(th_sch, "Stream scheduler");
+        // <<<<<<<<<<<<<<<<<<<<< uhd::set_thread_name(th_sch, "Stream scheduler");
     }
 
     work_threads_group.join_all();
