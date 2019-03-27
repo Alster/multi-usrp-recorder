@@ -203,7 +203,7 @@ int UHD_SAFE_MAIN(int argc, char *argv[]) {
 
     //regionDevice creation
     boost::thread_group create_threads_group;
-    double gain(32);
+    double gain(50);
 
     bool get_serial_from_opt = true;
     auto splitted_opts = std::vector<std::vector<std::string>>();
