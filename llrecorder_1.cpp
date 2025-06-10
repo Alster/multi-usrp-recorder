@@ -91,61 +91,21 @@ struct BandOpt {
 };
 
 int UHD_SAFE_MAIN(int argc, char *argv[]) {
-
-    //БЛЯДЬ! Заебала эта буферизация
     std::cout.setf(std::ios::unitbuf);
 
     std::cerr << "v" << LLRECORDER_VERSION << std::endl;
-    ////////////////////////////////////////////////////////////////////
-    // Hi
-    ////////////////////////////////////////////////////////////////////
     std::ostringstream string_stream;
     string_stream << bold << blue << "[LL Recorder" << def << "] ";
     std::string log_prepend = string_stream.str();
 
     uhd::set_thread_priority_safe();
 
-//    std::cout << "gr complex " << sizeof(gr_complex) << std::endl;
-//    std::cout << "std complex " << sizeof(std::complex<float>) << std::endl;
-//    std::cout << "float " << sizeof(float) << std::endl;
     uhd::device_addrs_t device_addrs = uhd::device::find(std::string());
     for (auto it = device_addrs.begin(); it != device_addrs.end(); ++it) {
         std::string serial = (*it)["serial"];
         std::cout << log_prepend << "FOUND device " << serial << std::endl;
         device_serials.push_back(serial);
     }
-
-    //region Play with gsm_header
-//// uint8_t version;	/* version, set to GSMTAP_VERSION */
-//    std::cout << sizeof(uint8_t) << std::endl;
-//// uint8_t hdr_len;	/* length in number of 32bit words */
-//    std::cout << sizeof(uint8_t) << std::endl;
-//// uint8_t type;		/* see GSMTAP_TYPE_* */
-//    std::cout << sizeof(uint8_t) << std::endl;
-//// uint8_t timeslot;	/* timeslot (0..7 on Um) */
-//    std::cout << sizeof(uint8_t) << std::endl;
-////
-//// uint16_t arfcn;		/* ARFCN (frequency) */
-//    std::cout << sizeof(uint16_t) << std::endl;
-//// int8_t signal_dbm;	/* signal level in dBm */
-//    std::cout << sizeof(int8_t) << std::endl;
-//// int8_t snr_db;		/* signal/noise ratio in dB */
-//    std::cout << sizeof(int8_t) << std::endl;
-////
-//// uint32_t frame_number;	/* GSM Frame Number (FN) */
-//    std::cout << sizeof(uint32_t) << std::endl;
-////
-//// uint8_t sub_type;	/* Type of burst/channel, see above */
-//    std::cout << sizeof(int8_t) << std::endl;
-//// uint8_t antenna_nr;	/* Antenna Number */
-//    std::cout << sizeof(int8_t) << std::endl;
-//// uint8_t sub_slot;	/* sub-slot within timeslot */
-//    std::cout << sizeof(int8_t) << std::endl;
-//// uint8_t res;		/* reserved for future use (RFU) */
-//    std::cout << sizeof(int8_t) << std::endl;
-//
-    //endregion
-//    return 0;
 
     std::signal(SIGINT, &sig_int_handler);
     std::signal(SIGHUP, &sig_int_handler);
@@ -185,9 +145,6 @@ int UHD_SAFE_MAIN(int argc, char *argv[]) {
     }
 
     fs::path targetFolder = fs::path(_dir);
-//    if (targetFolder.exs) {
-//        throw std::runtime_error("Invalid opt dir: " + _dir);
-//    }
 
     std::cout << log_prepend << "Trager folder is " << targetFolder << std::endl;
 
